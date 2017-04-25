@@ -1,0 +1,19 @@
+# proxy package >= R (3.3.2)
+
+> sessionInfo()
+R version 3.3.3 (2017-03-06)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows >= 8 x64 (build 9200)
+
+locale:
+[1] LC_COLLATE=English_United States.1252  LC_CTYPE=English_United States.1252    LC_MONETARY=English_United States.1252
+[4] LC_NUMERIC=C                           LC_TIME=English_United States.1252    
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+[1] recommenderlab_0.2-2 registry_0.3         proxy_0.4-17         arules_1.4-2         Matrix_1.2-8        
+
+loaded via a namespace (and not attached):
+[1] tools_3.3.3     grid_3.3.3      irlba_2.1.1     lattice_0.20-33
