@@ -2,6 +2,7 @@ library(reshape2)
 library(dplyr)
 library(igraph)
 library(arules)
+library(arulesViz)
 
 # http://michael.hahsler.net/research/arules_RUG_2015/demo/#mine-association-rules
 
@@ -109,27 +110,38 @@ inspect(sort(w_itemsets))
 inspect(sort(a_itemsets))
 
 ## rule induction
-n_rules <- ruleInduction(n_eclat, confidence = 0.8)
-w_rules <- ruleInduction(w_eclat, confidence = 0.8)
-a_rules <- ruleInduction(a_fitem, trans, confidence = 0.4)
+n_rules <- ruleInduction(n_itemsets, confidence = 0.8)
+w_rules <- ruleInduction(w_itemsets, confidence = 0.8)
+a_rules <- ruleInduction(a_itemsets, trans, confidence = 0.8)
 
 inspect(sort(n_rules))
 inspect(sort(w_rules))
 inspect(sort(a_rules))
 
-# ## remove duplicate rules
-# # for better comparison we sort the rules by confidence and add Bayado's improvement
-# rules <- sort(rules, by = "confidence")
-# quality(rules)$improvement <- interestMeasure(rules, measure = "improvement")
-# inspect(rules[1:5])
+# r_measure <- 'improvement'
+# n_redundant <- is.redundant(n_rules, measure = r_measure)
+# w_redundant <- is.redundant(w_rules, measure = r_measure)
+# a_redundant <- is.redundant(a_rules, measure = r_measure)
 # 
-# sum(is.redundant(rules, measure = "confidence"))
-# sum(is.redundant(rules, measure = "improvement"))
-# 
-# rules[!is.redundant(rules, measure = "confidence")]
-# rules[!is.redundant(rules, measure = "improvement")]
-# 
-# rules_up <- rules[!is.redundant(rules)]
+# inspect(sort(n_rules[!n_redundant]))
+# inspect(sort(w_rules[!w_redundant]))
+# inspect(sort(a_rules[!a_redundant]))
+
+
+
+## remove duplicate rules 
+# for better comparison we sort the rules by confidence and add Bayado's improvement 
+rules <- sort(rules, by = "confidence") 
+quality(rules)$improvement <- interestMeasure(rules, measure = "improvement") 
+inspect(rules[1:5])
+
+sum(is.redundant(rules, measure = "confidence")) 
+sum(is.redundant(rules, measure = "improvement"))
+
+rules[!is.redundant(rules, measure = "confidence")] rules[!is.redundant(rules,
+measure = "improvement")]
+
+rules_up <- rules[!is.redundant(rules)]
 
 
 
