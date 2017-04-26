@@ -1,0 +1,135 @@
+library(reshape2)
+library(dplyr)
+library(igraph)
+library(arules)
+
+## helpers
+# get item sets per transaction id
+concat_items <- function(data) {
+    unname(do.call(c, lapply(as.data.frame(t(data)), function(e) {
+        e <- e[e != '']
+        paste0('{', paste(e, collapse = ","), '}')
+    })))
+}
+
+# HITS implementation
+get_hits <- function(g, k){ 
+    #Get the adjacency matrix of the input grpah g
+    adj <- get.adjacency(g) 
+    
+    #Get number of nodes(rows) in adjacency matrix
+    nodes<-dim(adj)[1] 
+    
+    #Initialize authority and hub vector to 1 for each node
+    auth <- c(rep(1, nodes)) 
+    hub <- c(rep(1, nodes)) 
+    
+    for (i in 1:k) {
+        #Get transpose of adjacency matrix
+        t_adj <- t(adj) 
+        
+        #Authority and Hub scores are calculated using HITS mathematical definition
+        auth <- t_adj %*% hub 
+        hub <- adj %*% auth 
+        
+        #Summation of squares of authority and hub scores are calculated 
+        #to normalize Authority and Hub scores
+        sum_sq_auth <- sum(auth * auth) 
+        sum_sq_hub <- sum(hub * hub) 
+        
+        #Normalize Hub and Authority scores
+        auth <- auth/sqrt(sum_sq_auth) 
+        hub <- hub/sqrt(sum_sq_hub) 
+    } 
+    
+    #Authority and Hub scores are combined into 1 vector and returned
+    result<-c(auth,hub) 
+    
+    return(result) 
+}
+
+## create transaction data
+#data("SunBai")
+txt <- '
+A,B,C,D,E
+C,F,G,,
+A,B,,,
+A,,,,
+C,F,G,H,
+A,G,H,,
+'
+df <- read.csv(text = txt, header = FALSE, stringsAsFactors = FALSE) %>%
+    mutate(id = row_number()*100)
+df_long <- melt(df, id = "id") %>% filter(value != '') %>% select(id, value)
+trans <- as(split(df_long[,'value'], df_long['id']), "transactions")
+
+## calculate transaction weights
+# manual
+G <- graph.data.frame(df_long)
+V(G)$type <- V(G)$name %in% df_long[, 1]
+#G
+plot(G, layout = layout.bipartite)
+
+kmax <- 15
+H <- get_hits(G, kmax)
+wm <- H[[2]][rownames(H[[2]]) %in% df_long$id]
+
+# arules
+w <- hits(trans)
+
+df_w <- data.frame(w_arules = w, w_manual = wm)
+
+## add transaction weight
+transactionInfo(trans)[['weight']] <- w
+cbind(transactionInfo(trans), itemset = concat_items(df[, names(df) != 'id'])) %>%
+    select(transactionID, itemset, weight)
+
+## support
+n_support <- itemFrequency(trans, weighted = FALSE)
+w_support <- itemFrequency(trans, weighted = TRUE)
+# A: (0.5176528+0.2321374+0.1476262+0.4123691)/sum(transactionInfo(trans)$weight)
+df_support <- data.frame(n_support = n_support, w_support = w_support)
+
+par(mfrow = c(1,2))
+itemFrequencyPlot(trans, main = "Unweighted frequency")
+itemFrequencyPlot(trans, weighted = TRUE, main = "Weighted frequency")
+par(mfrow = c(1,1))
+
+## frequent itemsets
+# Closed Frequent Itemset
+# http://www.hypertextbookshop.com/dataminingbook/public_version/contents/chapters/chapter002/section004/blue/page002.html
+n_itemsets <- eclat(trans, parameter = list(support = 0.3), control = list(verbose = TRUE))
+w_itemsets <- weclat(trans, parameter = list(support = 0.3), control = list(verbose = TRUE))
+a_itemsets <- apriori(trans, parameter = list(target = 'frequent', support = 0.3), control = list(verbose = TRUE))
+
+inspect(sort(n_itemsets))
+inspect(sort(w_itemsets))
+inspect(sort(a_itemsets))
+
+## rule induction
+n_rules <- ruleInduction(n_eclat, confidence = 0.8)
+w_rules <- ruleInduction(w_eclat, confidence = 0.8)
+a_rules <- ruleInduction(a_fitem, trans, confidence = 0.4)
+
+inspect(sort(n_rules))
+inspect(sort(w_rules))
+inspect(sort(a_rules))
+
+# ## remove duplicate rules
+# # for better comparison we sort the rules by confidence and add Bayado's improvement
+# rules <- sort(rules, by = "confidence")
+# quality(rules)$improvement <- interestMeasure(rules, measure = "improvement")
+# inspect(rules[1:5])
+# 
+# sum(is.redundant(rules, measure = "confidence"))
+# sum(is.redundant(rules, measure = "improvement"))
+# 
+# rules[!is.redundant(rules, measure = "confidence")]
+# rules[!is.redundant(rules, measure = "improvement")]
+# 
+# rules_up <- rules[!is.redundant(rules)]
+
+
+
+
+
