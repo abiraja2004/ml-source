@@ -3,6 +3,8 @@ library(dplyr)
 library(igraph)
 library(arules)
 
+# http://michael.hahsler.net/research/arules_RUG_2015/demo/#mine-association-rules
+
 ## helpers
 # get item sets per transaction id
 concat_items <- function(data) {
