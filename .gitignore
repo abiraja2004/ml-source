@@ -5,3 +5,10 @@
 
 ## Eclipse
 .metadata
+*.project
+*.pydevproject
+
+
+## Python
+# virtual env
+*venv
