@@ -15,6 +15,9 @@
 # python fuzzy text search
 # http://stackoverflow.com/questions/30449452/python-fuzzy-text-search
 
+# fuzzywuzzy
+# https://github.com/seatgeek/fuzzywuzzy
+
 #import nltk
 #nltk.download('all')
 
