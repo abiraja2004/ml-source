@@ -10,6 +10,11 @@
 # FUZZY STRING MATCHING IN PYTHON
 # http://streamhacker.com/2011/10/31/fuzzy-string-matching-python/
 
+# Whoosh 2.7.4 documentation
+# http://whoosh.readthedocs.io/en/latest/index.html
+# python fuzzy text search
+# http://stackoverflow.com/questions/30449452/python-fuzzy-text-search
+
 #import nltk
 #nltk.download('all')
 
