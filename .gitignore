@@ -1,3 +1,7 @@
+## R
 *.Rproj.user
 *.Rhistory
 *.RData
+
+## Eclipse
+.metadata
