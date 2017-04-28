@@ -12,3 +12,8 @@
 ## Python
 # virtual env
 *venv
+
+## Misc
+*.csv
+*.gz
+*.rds
