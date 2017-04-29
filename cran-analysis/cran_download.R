@@ -56,29 +56,3 @@ stopCluster(cl)
 result_df <- do.call(rbind, result)
 #sum(as.Date(days) %in% as.Date(sub('.csv.gz', '', list.files(raw_path)))) == length(days)
 
-#### read data
-# 9 NAs
-read_log_apply <- function(files, download_folder = file.path(getwd(), 'data')) {
-    do.call(rbind, lapply(files, function(x) {
-        message('####################################################')
-        message('msg: reading, ', x)
-        message('####################################################')
-        read_csv(file.path(download_folder, x)) %>% filter(!is.na(ip_id)) %>%
-            mutate(trans_id = paste(gsub('-', '', date), ip_id, sep = '_')) %>%
-            select(trans_id, package)        
-    }))
-}
-
-raw_path <- file.path(getwd(), 'raw')
-files <- list.files(raw_path)
-files <- files[as.Date(sub('.csv.gz', '', files)) > as.Date('2017-03-31')]
-cores <- detectCores() - 1
-files_split <- split(files, 1:cores)
-cl <- makeCluster(cores)
-init <- clusterEvalQ(cl, { library(dplyr); library(readr); NULL })
-log <- parLapplyLB(cl, files_split, read_log_apply, download_folder = raw_path)
-stopCluster(cl)
-
-log <- do.call(rbind, log)
-data_path <- file.path(getwd(), 'data')
-write_rds(log, file.path(data_path, 'cran_log_201704.rds'), compress = 'gz')
