@@ -41,7 +41,7 @@ download_log_apply <- function(dates, download_folder = getwd(), only_missing = 
     }))
 }
 
-data_path <- file.path(getwd(), 'data')
+raw_path <- file.path(getwd(), 'raw')
 start <- as.Date('2017-01-01')
 end <- as.Date('2017-04-26')
 days <- seq(start, end, by = 'day')
@@ -50,11 +50,11 @@ cores <- detectCores() - 1
 days_split <- split(days, 1:cores)
 cl <- makeCluster(cores)
 init <- clusterEvalQ(cl, { library(lubridate); NULL })
-result <- parLapplyLB(cl, days_split, download_log_apply, download_folder = data_path)
+result <- parLapplyLB(cl, days_split, download_log_apply, download_folder = raw_path)
 stopCluster(cl)
 
 result_df <- do.call(rbind, result)
-#sum(as.Date(days) %in% as.Date(sub('.csv.gz', '', list.files(data_path)))) == length(days)
+#sum(as.Date(days) %in% as.Date(sub('.csv.gz', '', list.files(raw_path)))) == length(days)
 
 #### read data
 # 9 NAs
@@ -69,15 +69,16 @@ read_log_apply <- function(files, download_folder = file.path(getwd(), 'data')) 
     }))
 }
 
-data_path <- file.path(getwd(), 'data')
-files <- list.files(data_path)
+raw_path <- file.path(getwd(), 'raw')
+files <- list.files(raw_path)
 files <- files[as.Date(sub('.csv.gz', '', files)) > as.Date('2017-03-31')]
 cores <- detectCores() - 1
 files_split <- split(files, 1:cores)
 cl <- makeCluster(cores)
 init <- clusterEvalQ(cl, { library(dplyr); library(readr); NULL })
-log <- parLapplyLB(cl, files_split, read_log_apply, download_folder = data_path)
+log <- parLapplyLB(cl, files_split, read_log_apply, download_folder = raw_path)
 stopCluster(cl)
 
 log <- do.call(rbind, log)
-write_rds(log, 'cran_log_201704.rds', compress = 'gz')
+data_path <- file.path(getwd(), 'data')
+write_rds(log, file.path(data_path, 'cran_log_201704.rds'), compress = 'gz')
