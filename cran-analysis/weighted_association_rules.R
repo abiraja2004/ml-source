@@ -16,39 +16,25 @@ concat_items <- function(data) {
 }
 
 # HITS implementation
-get_hits <- function(g, k){ 
-    #Get the adjacency matrix of the input grpah g
-    adj <- get.adjacency(g) 
-    
+get_hits <- function(A, k){ 
     #Get number of nodes(rows) in adjacency matrix
-    nodes<-dim(adj)[1] 
+    nodes <- dim(A)[1] 
     
     #Initialize authority and hub vector to 1 for each node
     auth <- c(rep(1, nodes)) 
     hub <- c(rep(1, nodes)) 
     
     for (i in 1:k) {
-        #Get transpose of adjacency matrix
-        t_adj <- t(adj) 
-        
         #Authority and Hub scores are calculated using HITS mathematical definition
-        auth <- t_adj %*% hub 
-        hub <- adj %*% auth 
-        
-        #Summation of squares of authority and hub scores are calculated 
-        #to normalize Authority and Hub scores
-        sum_sq_auth <- sum(auth * auth) 
-        sum_sq_hub <- sum(hub * hub) 
+        auth <- t(A) %*% hub
+        hub <- A %*% auth
         
         #Normalize Hub and Authority scores
-        auth <- auth/sqrt(sum_sq_auth) 
-        hub <- hub/sqrt(sum_sq_hub) 
+        auth <- auth/sqrt(sum(auth * auth)) 
+        hub <- hub/sqrt(sum(hub * hub)) 
     } 
     
-    #Authority and Hub scores are combined into 1 vector and returned
-    result<-c(auth,hub) 
-    
-    return(result) 
+    c(auth, hub)
 }
 
 ## create transaction data
