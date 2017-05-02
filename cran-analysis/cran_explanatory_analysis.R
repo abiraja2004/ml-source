@@ -17,7 +17,7 @@ log <- read_csv(file.path(raw_path, filename))
 #     ungroup() %>% select(count) %>% unlist() %>%
 #     quantile(probs = seq(0.95, 1, 0.0125))
 
-## filter data and add group id - filter only less than or equal to max_cnt (default 20) downloads
+## filter data and add group id - keep only less than or equal to max_cnt (default 20) downloads
 filter_log <- function(log, max_cnt = 20, keep_trans_cols = FALSE, verbose = TRUE) {
     nrec <- nrow(log)
     log <- log %>% filter(size > 1024, !is.na(r_version), !is.na(r_arch), !is.na(r_os))
