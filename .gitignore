@@ -13,7 +13,9 @@
 # virtual env
 *venv
 
-## Misc
+## data folders
 *raw
 *data
+*trans
+
 

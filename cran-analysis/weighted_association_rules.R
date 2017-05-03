@@ -50,7 +50,7 @@ A,G,H,,
 df <- read.csv(text = txt, header = FALSE, stringsAsFactors = FALSE) %>%
     mutate(id = row_number()*100)
 df_long <- melt(df, id = "id") %>% filter(value != '') %>% select(id, value)
-trans <- as(split(df_long[,'value'], df_long['id']), "transactions")
+transTemp <- as(split(df_long[,'value'], df_long['id']), "transactions")
 
 ## calculate transaction weights
 # manual

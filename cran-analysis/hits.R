@@ -77,6 +77,13 @@ trans1 <- as(split(df_long[,'value'], df_long['id']), "transactions")
 #methods(class = class(trans))
 #as(trans@data, "dgCMatrix")
 
+df_up <- setDT(df_long) %>% dcast(formula = id ~ value, fun.aggregate = length)
+dim_names <- list(df_up$id, names(df_up %>% select(-id)))
+df_up <- df_up %>% select(-id) %>% as.matrix()
+dimnames(df_up) <- dim_names
+
+as(df_up, 'transactions')
+
 tmat <- dcast(df_long, id ~ value, fun.aggregate = length)
 row.names(tmat) <- tmat[, 1]
 tmat <- tmat[, -1]
@@ -108,4 +115,32 @@ hub <- hits$hub
 auth <- hits$auth
 
 # igraph has hub_score/authority_score but not equivalent
+
+a_list <- list(
+    c("a","b","c"),
+    c("a","b")
+)
+
+names(a_list) <- paste0('tr', 1:2)
+
+b_list <- list(
+    c("c","e"),
+    c("a","b","d","e")
+)
+
+names(b_list) <- paste0('tr', 3:4)
+
+a_trans <- as(a_list, 'transactions')
+b_trans <- as(b_list, 'transactions')
+
+merge(a_trans, b_trans)
+
+tmp <- as(as(a_matrix, 'ngCMatrix'), 'transactions')
+
+t_mat <- matrix(sample(0:1, size = 4, replace = T), nrow=2)
+t_mat <- as(t_mat, 'ngCMatrix')
+dimnames(t_mat) <- list(c('a', 'b'), c('AA', 'BB'))
+t_t <- as(t_mat, 'transactions')
+
+
 
