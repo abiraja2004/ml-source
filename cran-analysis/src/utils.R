@@ -42,6 +42,19 @@ pread_files <- function(files, path, cores = detectCores() - 1) {
 }
 #log <- pread_files(files[1:4], get_path('raw')(), 2)
 
+concat_items <- function(data, idcol = 'id') {
+    df <- do.call(rbind, lapply(as.data.frame(t(data)), function(e) {
+        splt_fac <- ifelse(names(e) == idcol, 'id', 'items')
+        splt <- split(e, splt_fac)
+        id <- unname(splt[['id']])
+        items <- unname(splt[['items']][splt[['items']] != ''])
+        data.frame(items = paste0('{', paste(items, collapse = ","), '}'),
+                   id = id, stringsAsFactors = FALSE)
+    }))
+    rownames(df) <- NULL
+    df
+}
+
 ############################################################
 ## functions related to constructing/merging transactions ##
 ############################################################
@@ -228,39 +241,47 @@ psave_trans <- function(files, from = get_path('raw')(), to = get_path('trans')(
 ############################################################
 ###### functions related to executing HITS algorithm #######
 ############################################################
-run_hits <- function(A, k = 100, tol = 1e-8, verbose = FALSE){ 
+get_adj <- function(trans) {
+    itemM <- trans@data
+    item_info <- if ('levels' %in% names(trans@itemInfo)) {
+        trans@itemInfo[, 'levels']
+    } else {
+        trans@itemInfo[[1]]
+    }
+    item_no <- length(item_info)
+    itemset_info <- trans@itemsetInfo[[1]]
+    itemset_no <- length(itemset_info)
+    leftM <- sparseMatrix(i = itemset_no, j = itemset_no, x = 0)
+    bottomM <- sparseMatrix(i = item_no, j = (itemset_no + item_no), x = 0)
+    rBind(cBind(leftM, t(itemM)), bottomM)
+}
+
+run_hits <- function(A, k = 100, tol = 1e-8, verbose = FALSE){
+    # mostly from Ch5 of Practical Graph Mining With R
+    # https://www.csc2.ncsu.edu/faculty/nfsamato/practical-graph-mining-with-R/PracticalGraphMiningWithR.html
+    
     #Get number of nodes(rows) in adjacency matrix
     nodes <- dim(A)[1] 
-    
     #Initialize authority and hub vector to 1 for each node
     auth <- c(rep(1, nodes)) 
-    hub <- c(rep(1, nodes)) 
-    
+    hub <- c(rep(1, nodes))
     for (i in 1:k) {
         auth_last <- auth
-        
-        #Authority and Hub scores are calculated using HITS mathematical definition
+        #Authority and Hub scores are calculated
         auth <- t(A) %*% hub
         hub <- A %*% auth
-        
         #Normalize Hub and Authority scores
         auth <- auth/sqrt(sum(auth * auth)) 
         hub <- hub/sqrt(sum(hub * hub))
-        
         err <- sum(abs(auth - auth_last))
-        if (verbose) {
-            message('msg: iteration ', i, ' error - ', err)
-        }
-        
+        if (verbose) message('msg: iteration ', i, ' error - ', err)
         if (err < nodes * tol) {
-            break;
+            break
         }
     }
-    
     if (err > nodes * tol) {
         warning('power iteration failed to converge in ', (i+1), ' iterations')
     }
-    
     return (list(auth = auth, hub = hub))
 }
 

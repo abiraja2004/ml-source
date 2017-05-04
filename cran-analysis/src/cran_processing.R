@@ -1,16 +1,16 @@
-source(file.path(getwd(), 'utils.R'))
+source(file.path(getwd(), 'src', 'utils.R'))
 
 files <- get_files(path = get_path('raw')(), rm_ptn = '.csv.gz', min_date = as.Date('2017-04-01'))
-# log <- pread_files(files, path = get_path('raw')(), cores = detectCores() - 1)
+# log <- pread_files(files, path = get_path('raw'), cores = detectCores() - 1)
 # write_rds(log, file.path(data_path, 'log_201704.rds'), compress = 'gz')
 # log <- read_rds(file.path(data_path, 'log_201704.rds'))
 
 #save_trans(files)
 
-trans_files <- get_files(path = get_path('trans')(), rm_ptn = '.rds')
+trans_files <- get_files(path = get_path('trans'), rm_ptn = '.rds')
 trans_lst <- lapply(trans_files, function(x) {
     message('msg: reading ', x)
-    read_rds(file.path(get_path('trans')(), x))
+    read_rds(file.path(get_path('trans'), x))
 })
 names(trans_lst) <- sub('.rds', '', trans_files)
 
@@ -21,32 +21,16 @@ trans_multiple <- merge_trans_lst(trans_lst, excl = 1)
 # nrow(trans_all) == lapply(list(trans_single, trans_multiple), nrow) %>% unlist() %>% sum()
 # write_rds(list(all = trans_all, single = trans_single, multiple = trans_multiple), 
 #           file.path(get_path('trans')(), 'trans.rds'), compress = 'gz')
-# trans <- read_rds(file.path(get_path('trans')(), 'trans.rds'))
+# trans <- read_rds(file.path(get_path('trans'), 'trans.rds'))
 # trans_all <- trans$all
 # trans_single <- trans$single
 # trans_multiple <- trans$multiple
 
-itemM <- as(trans@data, "dgCMatrix")
-
-get_adj <- function(trans) {
-    itemM <- trans@data %>% as ('dgCMatrix')
-    item_info <- if ('levels' %in% names(trans@itemInfo)) {
-        trans@itemInfo[, 'levels']
-    } else {
-        trans@itemInfo[[1]]
-    }
-    item_no <- length(item_info)
-    itemset_info <- trans@itemsetInfo[[1]]
-    itemset_no <- length(itemset_info)
-    leftM <- sparseMatrix(i = itemset_no, j = itemset_no, x = 0)# %>% as('ngCMatrix')
-    bottomM <- sparseMatrix(i = item_no, j = (itemset_no + item_no), x = 0)# %>% as('ngCMatrix')
-    rBind(cBind(leftM, t(itemM)), bottomM)
-}
-
 hub_arules <- hits(trans_multiple)
 names(hub_arules) <- trans_multiple@itemsetInfo[[1]]
+
 A <- get_adj(trans_multiple)
-hits <- get_hits(A, itemset_info, item_info, verbose = TRUE)
+hits <- get_hits(A, trans_multiple@itemsetInfo[[1]], trans_multiple@itemInfo[[1]], verbose = TRUE)
 hub <- hits$hub
 auth <- hits$auth
 
