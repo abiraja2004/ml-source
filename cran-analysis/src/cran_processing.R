@@ -27,43 +27,56 @@ trans_multiple <- merge_trans_lst(trans_lst, excl = 1)
 # trans_multiple <- trans$multiple
 
 itemM <- as(trans@data, "dgCMatrix")
-item_info <- if ('levels' %in% names(trans@itemInfo)) {
-    trans@itemInfo[, 'levels']
-} else {
-    trans@itemInfo[[1]]
-}
-item_no <- length(item_info)
-itemset_info <- trans@itemsetInfo[[1]]
-itemset_no <- length(itemset_info)
-leftM <- sparseMatrix(i = itemset_no, j = itemset_no, x = 0)
-bottomM <- sparseMatrix(i = item_no, j = (itemset_no + item_no), x = 0)
-A <- rBind(cBind(leftM, t(itemM)), bottomM)
 
-hub_arules <- hits(trans)
+get_adj <- function(trans) {
+    itemM <- trans@data %>% as ('dgCMatrix')
+    item_info <- if ('levels' %in% names(trans@itemInfo)) {
+        trans@itemInfo[, 'levels']
+    } else {
+        trans@itemInfo[[1]]
+    }
+    item_no <- length(item_info)
+    itemset_info <- trans@itemsetInfo[[1]]
+    itemset_no <- length(itemset_info)
+    leftM <- sparseMatrix(i = itemset_no, j = itemset_no, x = 0)# %>% as('ngCMatrix')
+    bottomM <- sparseMatrix(i = item_no, j = (itemset_no + item_no), x = 0)# %>% as('ngCMatrix')
+    rBind(cBind(leftM, t(itemM)), bottomM)
+}
+
+hub_arules <- hits(trans_multiple)
+names(hub_arules) <- trans_multiple@itemsetInfo[[1]]
+A <- get_adj(trans_multiple)
 hits <- get_hits(A, itemset_info, item_info, verbose = TRUE)
 hub <- hits$hub
 auth <- hits$auth
 
-# > tail(sort(hub_arules))
-# 7376445     7376446     7376447     7376448     7376449     7376450 
-# 0.001781054 0.001781054 0.001781054 0.001781054 0.001781054 0.001781054 
-# > tail(sort(hub))
-# 7376445      7376446      7376447      7376448      7376449      7376450 
-# 0.0009308594 0.0009308594 0.0009308594 0.0009308594 0.0009308594 0.0009308594 
-# hub_df <- data.frame(id = names(hub_arules), hub_arules = hub_arules, hub = hub)
+tail_a <- tail(sort(hub_arules), 20)
+tail_m <- tail(sort(hub), 20)
+hub_df <- data.frame(trans_a = names(tail_a), hub_a = as.vector(tail_a),
+                     trans_m = names(tail_m), hub_m = as.vector(tail_m),
+                     stringsAsFactors = FALSE) %>%
+    mutate(is_same = trans_a == trans_m)
 
+trans <- trans_multiple
 transactionInfo(trans)[['weight']] <- hub_arules
 
 n_support <- itemFrequency(trans, weighted = FALSE)
 w_support <- itemFrequency(trans, weighted = TRUE)
 
-df_support <- data.frame(n_support = n_support, w_support = w_support)
+tail_n <- tail(sort(n_support), 20)
+tail_w <- tail(sort(w_support), 20)
+#df_support <- data.frame(n_support = n_support, w_support = w_support)
 
-n_itemsets <- eclat(trans, parameter = list(support = 0.0001), control = list(verbose = TRUE))
-w_itemsets <- weclat(trans, parameter = list(support = 0.0001), control = list(verbose = TRUE))
+n_itemsets <- eclat(trans, parameter = list(support = 0.001), control = list(verbose = TRUE))
+w_itemsets <- weclat(trans, parameter = list(support = 0.001), control = list(verbose = TRUE))
 
-inspect(sort(n_itemsets))
-inspect(sort(w_itemsets))
+inspect(head(n_itemsets))
+inspect(head(w_itemsets))
+
+n_rules <- ruleInduction(n_itemsets, confidence = 0.8)
+w_rules <- ruleInduction(w_itemsets, confidence = 0.8)
+
+
 
 
 

@@ -12,11 +12,9 @@ library(arulesViz)
 ############################################################
 ################# basic utility function ###################
 ############################################################
-get_path <- function(base = getwd(), ...) {
+get_path <- function(..., base = getwd()) {
     stopifnot(dir.exists(base))
-    function() {
-        file.path(base, paste(list(...), collapse = '/'))
-    }
+    file.path(base, paste(list(...), collapse = '/'))
 }
 
 get_files <- function(path, rm_ptn = '.csv.gz', min_date = NULL, max_date = NULL) {
@@ -225,4 +223,52 @@ psave_trans <- function(files, from = get_path('raw')(), to = get_path('trans')(
     lst <- parLapplyLB(cl, splits, save_trans, from = from, to = to)
     stopCluster(cl)
     bind_rows(lst)    
+}
+
+############################################################
+###### functions related to executing HITS algorithm #######
+############################################################
+run_hits <- function(A, k = 100, tol = 1e-8, verbose = FALSE){ 
+    #Get number of nodes(rows) in adjacency matrix
+    nodes <- dim(A)[1] 
+    
+    #Initialize authority and hub vector to 1 for each node
+    auth <- c(rep(1, nodes)) 
+    hub <- c(rep(1, nodes)) 
+    
+    for (i in 1:k) {
+        auth_last <- auth
+        
+        #Authority and Hub scores are calculated using HITS mathematical definition
+        auth <- t(A) %*% hub
+        hub <- A %*% auth
+        
+        #Normalize Hub and Authority scores
+        auth <- auth/sqrt(sum(auth * auth)) 
+        hub <- hub/sqrt(sum(hub * hub))
+        
+        err <- sum(abs(auth - auth_last))
+        if (verbose) {
+            message('msg: iteration ', i, ' error - ', err)
+        }
+        
+        if (err < nodes * tol) {
+            break;
+        }
+    }
+    
+    if (err > nodes * tol) {
+        warning('power iteration failed to converge in ', (i+1), ' iterations')
+    }
+    
+    return (list(auth = auth, hub = hub))
+}
+
+get_hits <- function(A, itemsets, items, k = 100, tol = 1e-6, verbose = FALSE) {
+    hits <- run_hits(A, k, tol, verbose)
+    hub <- hits$hub[1:length(itemsets)]
+    names(hub) <- itemsets
+    auth <- hits$auth[(length(itemsets)+1):length(hits$auth)]
+    names(auth) <- items
+    list(auth = auth, hub = hub)
 }

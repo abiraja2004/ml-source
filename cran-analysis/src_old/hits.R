@@ -17,50 +17,7 @@ library(dplyr)
 library(arules)
 library(igraph)
 
-run_hits <- function(A, k = 100, tol = 1e-6, verbose = FALSE){ 
-    #Get number of nodes(rows) in adjacency matrix
-    nodes <- dim(A)[1] 
-    
-    #Initialize authority and hub vector to 1 for each node
-    auth <- c(rep(1, nodes)) 
-    hub <- c(rep(1, nodes)) 
-    
-    for (i in 1:k) {
-        auth_last <- auth
-        
-        #Authority and Hub scores are calculated using HITS mathematical definition
-        auth <- t(A) %*% hub
-        hub <- A %*% auth
-        
-        #Normalize Hub and Authority scores
-        auth <- auth/sqrt(sum(auth * auth)) 
-        hub <- hub/sqrt(sum(hub * hub))
-        
-        err <- sum(abs(auth - auth_last))
-        if (verbose) {
-            message('msg: iteration ', i, ' error - ', err)
-        }
-        
-        if (err < nodes * tol) {
-            break;
-        }
-    }
-    
-    if (err > nodes * tol) {
-        warning('power iteration failed to converge in ', (i+1), ' iterations')
-    }
-    
-    return (list(auth = auth, hub = hub))
-}
 
-get_hits <- function(A, itemsets, items, k = 100, tol = 1e-6, verbose = FALSE) {
-    hits <- run_hits(A, k, tol, verbose)
-    hub <- hits$hub[1:length(itemsets)]
-    names(hub) <- itemsets
-    auth <- hits$auth[(length(itemsets)+1):length(hits$auth)]
-    names(auth) <- items
-    list(auth = auth, hub = hub)
-}
 
 txt <- '
 A,B,C,D,E
