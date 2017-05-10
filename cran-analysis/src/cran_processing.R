@@ -1,9 +1,71 @@
+library(parallel)
+library(scales)
+library(ggplot2)
+library(igraph)
+library(arulesViz)
+
 source(file.path(getwd(), 'src', 'utils.R'))
 
-files <- get_files(path = get_path('raw')(), rm_ptn = '.csv.gz', min_date = as.Date('2017-04-01'))
-# log <- pread_files(files, path = get_path('raw'), cores = detectCores() - 1)
-# write_rds(log, file.path(data_path, 'log_201704.rds'), compress = 'gz')
-# log <- read_rds(file.path(data_path, 'log_201704.rds'))
+#### read log
+files <- get_log_names(path = get_path('raw'), extension = '.csv.gz', min_date = as.Date('2017-04-01'))
+items <- file.path(get_path('raw'), files)
+init_str <- "{ source(file.path(getwd(), 'src', 'utils.R')); NULL}"
+# log <- process(f = read_files, items = items, cores = detectCores() - 1, init_str = init_str, combine = rbind)
+# write_rds(log, file.path(get_path('data'), 'log_201704.rds'), compress = 'gz')
+# log <- read_rds(file.path(get_path('data'), 'log_201704.rds'))
+
+#### filter by size, r_version, r_arch, r_os
+log_filtered <- log %>% filter(size > 1024, !is.na(r_version), !is.na(r_arch), !is.na(r_os)) %>%
+    select(date, ip_id, r_version, r_arch, r_os, package) %>%
+    distinct(date, ip_id, r_version, r_arch, r_os, package) %>%
+    group_by(date, ip_id, r_version, r_arch, r_os) %>% mutate(count = n()) %>%
+    arrange(date, ip_id, r_version, r_arch, r_os)
+# write_rds(log_filtered, file.path(get_path('data'), 'log_filtered_201704.rds'), compress = 'gz')
+# log_filtered <- read_rds(file.path(get_path('data'), 'log_filtered_201704.rds'))
+
+log_trans <- log_filtered %>% group_by(count) %>%
+    summarise(num_rec = n()) %>% ungroup() %>%
+    mutate(num_trans = num_rec/count, 
+           prop_trans = round(num_trans/sum(num_trans)*100, 3)) %>%
+    mutate(count = as.factor(count))
+# write_rds(log_trans, file.path(get_path('data'), 'log_trans_201704.rds'), compress = 'gz')
+# log_trans <- read_rds(file.path(get_path('data'), 'log_trans_201704.rds'))
+
+
+ggplot(log_trans[1:20,], aes(x = count, y = prop_trans)) + 
+    geom_bar(stat="identity") + scale_y_continuous(labels = comma) +
+    ggtitle('Proportion of Transactions by Downloaded Packages') + 
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(x = 'Proportion of Transactions', y = 'Transactions')
+
+############################
+############################
+construct_trans <- function(items, ...) {
+    args <- list(...)
+    less_than <- if (!is.null(args$less_than)) {
+        args$less_than
+    } else {
+        20
+    }
+    
+    lapply(items, function(itm) {
+        log <- read_csv(itm) %>% filter_log(less_than = less_than) %>%
+            add_group_idx() %>% keep_trans_cols()
+    })
+}
+
+read_files <- function(items, ...) {
+    do.call(rbind, lapply(items, function(itm) {
+        read_csv(itm, ...)
+    }))
+}
+
+
+
+
+
+
+
 
 #save_trans(files)
 

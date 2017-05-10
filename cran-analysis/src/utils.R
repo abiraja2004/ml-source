@@ -1,13 +1,8 @@
-library(parallel)
 library(lubridate)
-library(scales)
-library(ggplot2)
 library(readr)
 library(data.table)
 library(dplyr)
-library(igraph)
 library(arules)
-library(arulesViz)
 
 ############################################################
 ################# basic utility function ###################
@@ -17,30 +12,14 @@ get_path <- function(..., base = getwd()) {
     file.path(base, paste(list(...), collapse = '/'))
 }
 
-get_files <- function(path, rm_ptn = '.csv.gz', min_date = NULL, max_date = NULL) {
+get_log_names <- function(path, extension = '.csv.gz', min_date = NULL, max_date = NULL) {
     files <- data.frame(filename = list.files(path), stringsAsFactors = FALSE) %>%
-        mutate(date = as.Date(sub(rm_ptn, '', filename))) %>%
+        mutate(date = as.Date(sub(extension, '', filename))) %>%
         filter(!is.na(date))
     if(!is.null(min_date)) files <- files %>% filter(date >= min_date)
     if(!is.null(max_date)) files <- files %>% filter(date <= max_date)
     files %>% select(filename) %>% unlist() %>% unname()
 }
-
-read_files <- function(files) {
-    do.call(rbind, lapply(files, function(f) {
-        read_csv(f)
-    }))
-}
-
-pread_files <- function(files, path, cores = detectCores() - 1) {
-    splits <- split(file.path(path, files), 1:cores)
-    cl <- makeCluster(cores)
-    init <- clusterEvalQ(cl, { library(readr); NULL })
-    lst <- parLapplyLB(cl, splits, read_files)
-    stopCluster(cl)
-    bind_rows(lst)
-}
-#log <- pread_files(files[1:4], get_path('raw')(), 2)
 
 concat_items <- function(data, idcol = 'id') {
     df <- do.call(rbind, lapply(as.data.frame(t(data)), function(e) {
@@ -55,35 +34,127 @@ concat_items <- function(data, idcol = 'id') {
     df
 }
 
-#
-# knitPost aims to convert a R markdown (Rmd) file into a markdown file (md) for an article.
-# It assumes the R markdown file should be named as '_YYYY-MM-DD-Article-Title.Rmd'
-# when the article's title is YYYY-MM-DD-Article-Title.
-# For further details, see http://jaehyeon-kim.github.io/intro/2014/11/19/R-Rroject-Setup/
-#
-# Usage
-# source("src/knitSrc.R")
-# knitPost("YYYY-MM-DD-Article-Title")
-#
-# last modified on Nov 20, 2014
-#
-
-knitPost <- function(title, base.url = "") {
-    require(knitr)
-    opts_knit$set(base.url = base.url)
-    fig.path <- get_path('rmd')
-    opts_chunk$set(fig.path = fig.path)
-    #opts_chunk$set(fig.cap = "center")
-    render_jekyll()
-    knit(file.path(get_path('rmd'), paste0("_",title,".Rmd")), file.path(get_path('rmd'), paste0(title,".md")), envir = parent.frame())
-    
-    # move fig files
-    #try(moveFigs(fig.path), TRUE)
+#### download data
+# url pattern - http://cran-logs.rstudio.com/2017/2017-04-26.csv.gz
+# items <- seq(as.Date('2017-01-01'), as.Date('2017-01-02'), by = 'day')
+# out1 <- process(f = download_log, items = items, cores = 1, download_folder = get_path('raw'))
+# out2 <- process(f = download_log, items = items, cores = 2, download_folder = get_path('raw'))
+download_log <- function(items, ...) {
+    args <- list(...)
+    download_folder <- if(!is.null(args$download_folder)) {
+        args$download_folder
+    } else {
+        getwd()
+    }
+    download_log <- function(item, download_folder) {
+        base_url <- 'http://cran-logs.rstudio.com'
+        year <- lubridate::year(lubridate::ymd(item))
+        file_name <- paste0(item, '.csv.gz')
+        url <- paste(base_url, year, file_name, sep = '/')
+        download.file(url, file.path(download_folder, file_name))
+    }
+    dir.create(download_folder, showWarnings = FALSE)
+    do.call(rbind, lapply(items, function(itm) {
+        tryCatch({
+            message('msg: start to download data for ', itm)
+            download_log(itm, download_folder = download_folder)
+            data.frame(date = itm, is_downloaded = TRUE, stringsAsFactors = FALSE)
+        }, error = function(e) {
+            message('error: fails to download data for ', itm)
+            data.frame(date = itm, is_downloaded = FALSE, stringsAsFactors = FALSE)
+        })
+    }))
 }
 
-get_path <- function(..., base = getwd()) {
-    stopifnot(dir.exists(base))
-    file.path(base, paste(list(...), collapse = '/'))
+#### read files
+# items <- file.path(get_path('raw'), list.files(get_path('raw'))[1:2])
+# out1 <- process(f = read_files, items = items, cores = 1)
+# init_str <- '{ library(readr); NULL }'
+# out2 <- process(f = read_files, items = items, cores = 2, init_str = init_str, combine = rbind)
+read_files <- function(items, ...) {
+    do.call(rbind, lapply(items, function(itm) {
+        read_csv(itm, ...)
+    }))
+}
+
+#### package information
+## package name
+get_pkg_names <- function(base_url = 'https://cran.r-project.org/web/packages/') {
+    by_name_url <- paste0(base_url, 'available_packages_by_name.html')
+    read_html(by_name_url) %>% html_nodes('td a') %>% html_text()    
+}
+
+## package information
+# items <- get_pkg_names()
+# out1 <- process(f = get_package_info, items = items[1:2], cores = 1, attribute = c('version', 'depends', 'imports', 'suggests'))
+# init_str <- '{ library(rvest); NULL }'
+# out2 <- process(f = get_package_info, items = items[1:4], cores = 2, init_str = init_str, combine = rbind)
+get_package_info <- function(items, ...) {
+    args <- list(...)
+    attribute <- if (!is.null(args$attribute)) {
+        args$attribute
+    } else {
+        c('version', 'depends', 'imports', 'suggests', 'published')
+    }
+    base_url <- if (!is.null(args$base_url)) {
+        args$base_url
+    } else {
+        'https://cran.r-project.org/web/packages/'
+    }
+    info <- do.call(rbind, lapply(items, function(itm) {
+        message('msg: get attributes of ', itm)
+        itm_info <- tryCatch({
+            read_html(paste0(base_url, itm)) %>% html_nodes('td') %>% html_text()
+        }, error = function(e) {
+            NULL
+        })
+        atts <- if (!is.null(itm_info)) {
+            do.call(c, lapply(attribute, function(a) {
+                # grep beginning of string
+                ind <- grep(paste0('^', a), itm_info, ignore.case = TRUE)
+                if (length(ind) > 0) ind <- ind[1]
+                att_values <- if (length(ind) > 0 && length(itm_info) > ind) {
+                    itm_info[ind + 1]
+                } else {
+                    NA
+                }
+            }))
+        } else {
+            rep(NA, length(attribute))
+        }
+        data.frame(itm, t(atts), stringsAsFactors = FALSE)
+    }))
+    names(info) <- c('package', attribute)
+    rownames(info) <- NULL
+    info
+}
+
+#### parallel processing
+process <- function(f, items, cores = detectCores() - 1, init_str = NULL, combine = rbind, ...) {
+    stopifnot(cores > 0)
+    
+    set_env <- function(init_str) {
+        e <- new.env()
+        e$init_str <- init_str
+        e
+    }
+    
+    if (cores == 1) {
+        results <- f(items = items, ...)
+    } else {
+        message('msg: create cluster of ', cores, ' nodes')
+        splits <- split(items, 1:cores)
+        cl <- makeCluster(cores)
+        if (!is.null(init_str)) {
+            clusterExport(cl, 'init_str', envir = set_env(init_str))
+            init <- clusterEvalQ(cl, eval(parse(text = init_str)))
+        }
+        results <- parLapplyLB(cl, splits, f, ...)
+        stopCluster(cl)
+        message('msg: combine results')
+        results <- do.call(combine, results)
+    }
+    results
 }
 
 ############################################################
@@ -96,12 +167,16 @@ get_path <- function(..., base = getwd()) {
 #     lapply(indx, function(i) splits[i])    
 # }
 
-filter_log <- function(log, less_than = 20) {
-    bind_rows(log) %>% filter(size > 1024, !is.na(r_version), !is.na(r_arch), !is.na(r_os)) %>%
+filter_log <- function(log, less_than = NULL) {
+    log <- log %>% filter(size > 1024, !is.na(r_version), !is.na(r_arch), !is.na(r_os)) %>%
         select(date, ip_id, r_version, r_arch, r_os, package) %>%
         distinct(date, ip_id, r_version, r_arch, r_os, package) %>%
-        group_by(date, ip_id, r_version, r_arch, r_os) %>% mutate(count = n()) %>%
-        filter(count < less_than)
+        group_by(date, ip_id, r_version, r_arch, r_os) %>% mutate(count = n())
+    if (!is.null(less_than)) {
+        log %>% filter(count < less_than)
+    } else {
+        log
+    }
 }
 
 add_group_idx <- function(log) {
@@ -323,4 +398,30 @@ get_hits <- function(A, itemsets, items, k = 100, tol = 1e-6, verbose = FALSE) {
     auth <- hits$auth[(length(itemsets)+1):length(hits$auth)]
     names(auth) <- items
     list(auth = auth, hub = hub)
+}
+
+#
+# knitPost aims to convert a R markdown (Rmd) file into a markdown file (md) for an article.
+# It assumes the R markdown file should be named as '_YYYY-MM-DD-Article-Title.Rmd'
+# when the article's title is YYYY-MM-DD-Article-Title.
+# For further details, see http://jaehyeon-kim.github.io/intro/2014/11/19/R-Rroject-Setup/
+#
+# Usage
+# source("src/knitSrc.R")
+# knitPost("YYYY-MM-DD-Article-Title")
+#
+# last modified on Nov 20, 2014
+#
+
+knitPost <- function(title, base.url = "") {
+    require(knitr)
+    opts_knit$set(base.url = base.url)
+    fig.path <- get_path('rmd')
+    opts_chunk$set(fig.path = fig.path)
+    #opts_chunk$set(fig.cap = "center")
+    render_jekyll()
+    knit(file.path(get_path('rmd'), paste0("_",title,".Rmd")), file.path(get_path('rmd'), paste0(title,".md")), envir = parent.frame())
+    
+    # move fig files
+    #try(moveFigs(fig.path), TRUE)
 }
