@@ -1,15 +1,16 @@
 library(parallel)
 library(scales)
 library(ggplot2)
+library(rvest)
 library(igraph)
 library(arulesViz)
 
 source(file.path(getwd(), 'src', 'utils.R'))
 
 #### read log
-files <- get_log_names(path = get_path('raw'), extension = '.csv.gz', min_date = as.Date('2017-04-01'))
+files <- get_files(path = get_path('raw'), extension = '.csv.gz', min_date = as.Date('2017-04-01'))
 items <- file.path(get_path('raw'), files)
-init_str <- "{ source(file.path(getwd(), 'src', 'utils.R')); NULL}"
+# init_str <- "{ source(file.path(getwd(), 'src', 'utils.R')); NULL}"
 # log <- process(f = read_files, items = items, cores = detectCores() - 1, init_str = init_str, combine = rbind)
 # write_rds(log, file.path(get_path('data'), 'log_201704.rds'), compress = 'gz')
 # log <- read_rds(file.path(get_path('data'), 'log_201704.rds'))
@@ -31,43 +32,76 @@ log_trans <- log_filtered %>% group_by(count) %>%
 # write_rds(log_trans, file.path(get_path('data'), 'log_trans_201704.rds'), compress = 'gz')
 # log_trans <- read_rds(file.path(get_path('data'), 'log_trans_201704.rds'))
 
-
 ggplot(log_trans[1:20,], aes(x = count, y = prop_trans)) + 
     geom_bar(stat="identity") + scale_y_continuous(labels = comma) +
     ggtitle('Proportion of Transactions by Downloaded Packages') + 
     theme(plot.title = element_text(hjust = 0.5)) +
-    labs(x = 'Proportion of Transactions', y = 'Transactions')
+    labs(x = 'Number of Downloaded Packages', y = 'Proportion of Transactions')
 
-############################
-############################
-construct_trans <- function(items, ...) {
-    args <- list(...)
-    less_than <- if (!is.null(args$less_than)) {
-        args$less_than
-    } else {
-        20
-    }
-    
-    lapply(items, function(itm) {
-        log <- read_csv(itm) %>% filter_log(less_than = less_than) %>%
-            add_group_idx() %>% keep_trans_cols()
-    })
-}
+#### save transactions
+files <- get_files(path = get_path('raw'), extension = '.csv.gz', min_date = as.Date('2017-04-01'))
+items <- file.path(get_path('raw'), files)
+init_str <- "{ source(file.path(getwd(), 'src', 'utils.R')); NULL}"
+trans_save <- process(f = save_trans, items = items, cores = 4, init_str = init_str, combine = rbind)
 
-read_files <- function(items, ...) {
-    do.call(rbind, lapply(items, function(itm) {
-        read_csv(itm, ...)
-    }))
-}
+#### merging transactions
+txt <- 'A,B,C,D,E\nC,F,G,,\nA,B,,,\nA,,,,\nC,F,G,H,\nA,G,H,,'
+df <- read.csv(text = txt, header = FALSE, stringsAsFactors = FALSE) %>%
+    mutate(id = row_number()*100)
+df_all <- df %>% melt(id = "id") %>% filter(value != '') %>% select(id, value)
+df_1 <- df[1:3,] %>% reshape2::melt(id = "id") %>% 
+    filter(value != '') %>% select(id, value)
+df_2 <- df[4:6,] %>% reshape2::melt(id = "id") %>% 
+    filter(value != '') %>% select(id, value)
+trans_all <- as(split(df_all[, 'value'], df_all[, 'id']), 'transactions')
+trans_1 <- as(split(df_1[, 'value'], df_1[, 'id']), 'transactions')
+trans_2 <- as(split(df_2[, 'value'], df_2[, 'id']), 'transactions')
+trans_merge <- do.call(bind_trans, list(trans_1, trans_2))
 
-
-
+as(trans_all, 'data.frame') %>% 
+    inner_join(as(trans_merge, 'data.frame'), by = c('transactionID' = 'itemsetID'))
 
 
+files <- get_files(path = get_path('trans'), extension = '.rds')
+items <- file.path(get_path('trans'), files)
+init_str <- "{ source(file.path(getwd(), 'src', 'utils.R')); NULL}"
+trans_all <- process(f = read_trans, items = items, cores = detectCores() - 1,
+                     init_str = init_str, combine = bind_trans, excl_group = NULL)
+trans_multiple <- process(f = read_trans, items = items, cores = detectCores() - 1,
+                          init_str = init_str, combine = bind_trans, excl_group = 1)
+
+trans_size <- data.frame(from_trans_all = nrow(trans_all),
+                         from_trans_mult = nrow(trans_multiple))
+
+log_trans %>% filter(as.integer(count) <= 20) %>% 
+    summarise(from_log_all = sum(num_trans)) %>% bind_cols(trans_size)
 
 
 
-#save_trans(files)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+do.call(sum, tmp)
+
+t <- read_rds(items[1])
 
 trans_files <- get_files(path = get_path('trans'), rm_ptn = '.rds')
 trans_lst <- lapply(trans_files, function(x) {
